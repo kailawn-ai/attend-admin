@@ -9,10 +9,14 @@ const PUBLIC_ROUTES = new Set(["/login"]);
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, isLoading, user } = useSession();
+  const { authStatus, isAuthenticated, user } = useSession();
 
   useEffect(() => {
-    if (isLoading) {
+    if (
+      authStatus === "checking" ||
+      authStatus === "signing-in" ||
+      authStatus === "signing-out"
+    ) {
       return;
     }
 
@@ -26,14 +30,24 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (isAuthenticated && isPublicRoute && user) {
       router.replace(getPostAuthRoute(user));
     }
-  }, [isAuthenticated, isLoading, pathname, router, user]);
+  }, [authStatus, isAuthenticated, pathname, router, user]);
 
-  if (isLoading) {
+  if (
+    authStatus === "checking" ||
+    authStatus === "signing-in" ||
+    authStatus === "signing-out"
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#16213A] px-6">
         <div className="w-full max-w-sm rounded-[28px] bg-white/10 px-6 py-8 text-center text-white backdrop-blur-sm">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white" />
-          <p className="mt-4 text-sm text-slate-200">Checking your session...</p>
+          <p className="mt-4 text-sm text-slate-200">
+            {authStatus === "signing-in"
+              ? "Signing you in..."
+              : authStatus === "signing-out"
+                ? "Signing you out..."
+                : "Checking your session..."}
+          </p>
         </div>
       </div>
     );

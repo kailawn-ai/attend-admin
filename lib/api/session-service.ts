@@ -1,4 +1,5 @@
 import { apiClient } from "@/lib/api/apiClient";
+import { extractAuthSession, extractSessionUser } from "@/lib/api/auth-session";
 import type { User } from "@/lib/api/user-service";
 
 export type SessionUser = User;
@@ -8,6 +9,12 @@ export type SessionResponse<TData> = {
   message: string;
   data: TData;
   errors?: Record<string, string[]> | null;
+  token?: string;
+  access_token?: string;
+  refresh_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  expires_at?: string | number;
 };
 
 export type LoginPayload = {
@@ -67,3 +74,9 @@ export const sessionService = {
 };
 
 export const { me, login, register, logout } = sessionService;
+
+export function getSessionUserFromResponse(payload: unknown) {
+  return extractSessionUser<SessionUser>(payload);
+}
+
+export { extractAuthSession };

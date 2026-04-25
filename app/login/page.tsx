@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/api/apiClient";
 import { getPostAuthRoute, useSession } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme-context";
 
 type FieldConfig = {
   key: "email" | "password";
@@ -30,6 +31,7 @@ const LOGIN_FIELDS: FieldConfig[] = [
 export default function LoginPage() {
   const router = useRouter();
   const { signIn } = useSession();
+  const { theme, toggleTheme } = useTheme();
   const [rememberMe, setRememberMe] = useState(true);
   const [form, setForm] = useState({
     email: "",
@@ -86,6 +88,15 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(96,165,250,0.2),_transparent_34%),linear-gradient(180deg,_#f6f8ff_0%,_#edf3ff_100%)] px-4 py-0 text-slate-900 dark:bg-[radial-gradient(circle_at_top,_rgba(39,59,110,0.55),_transparent_34%),linear-gradient(180deg,_#16213A_0%,_#0f1729_100%)] dark:text-slate-100 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
       <section className="relative mx-auto flex min-h-screen w-full max-w-md flex-col overflow-hidden bg-[#dbeafe] sm:min-h-[720px] sm:max-w-6xl sm:rounded-[36px] sm:shadow-[0_30px_90px_rgba(148,163,184,0.28)] dark:bg-[#16213A] dark:sm:shadow-[0_30px_90px_rgba(2,6,23,0.38)] lg:grid lg:min-h-[760px] lg:grid-cols-[1.05fr_0.95fr]">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          className="absolute right-5 top-5 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-white/50 bg-white/75 text-slate-700 shadow-sm backdrop-blur-sm transition hover:bg-white dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-100 dark:hover:bg-slate-900 sm:right-7 sm:top-7"
+        >
+          <ThemeIcon theme={theme} />
+        </button>
+
         <div className="relative overflow-hidden bg-[linear-gradient(180deg,_#dbeafe_0%,_#bfdbfe_100%)] px-6 pb-20 pt-10 sm:px-8 sm:pb-24 sm:pt-12 dark:bg-none lg:flex lg:flex-col lg:justify-between lg:px-12 lg:py-14 xl:px-16">
           <div className="absolute -right-24 -top-8 h-64 w-64 rounded-full bg-[#bfdbfe] opacity-95 sm:-right-10 sm:top-0 sm:h-72 sm:w-72 dark:bg-[#2A3550] lg:right-[-70px] lg:top-[-40px] lg:h-80 lg:w-80" />
           <div className="absolute right-6 top-4 h-48 w-48 rounded-full bg-[#93c5fd] opacity-85 sm:right-14 sm:top-10 sm:h-56 sm:w-56 dark:bg-[#202B44] lg:right-12 lg:top-16 lg:h-72 lg:w-72" />
@@ -319,6 +330,48 @@ function EyeIcon({ open }: { open: boolean }) {
       <path d="M10.6 10.7A3 3 0 0013.3 13.4" />
       <path d="M9.9 5.2A11.2 11.2 0 0112 5c6.5 0 10 7 10 7a18.8 18.8 0 01-4.2 4.8" />
       <path d="M6.2 6.3A18.2 18.2 0 002 12s3.5 7 10 7a9.7 9.7 0 004-.8" />
+    </svg>
+  );
+}
+
+function ThemeIcon({ theme }: { theme: "light" | "dark" }) {
+  if (theme === "dark") {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className="h-5 w-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2.5" />
+        <path d="M12 19.5V22" />
+        <path d="M4.93 4.93l1.77 1.77" />
+        <path d="M17.3 17.3l1.77 1.77" />
+        <path d="M2 12h2.5" />
+        <path d="M19.5 12H22" />
+        <path d="M4.93 19.07l1.77-1.77" />
+        <path d="M17.3 6.7l1.77-1.77" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" />
     </svg>
   );
 }

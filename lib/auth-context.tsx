@@ -9,20 +9,33 @@ import {
   useMemo,
   useState,
 } from "react";
-import { ApiError } from "@/lib/api/apiClient";
+import {
+  clearApiSession,
+  hydrateApiSession,
+  setApiSession,
+} from "@/lib/api/apiClient";
 import {
   type LoginPayload,
   type RegisterPayload,
   type SessionUser,
+  extractAuthSession,
+  getSessionUserFromResponse,
   login,
-  logout,
   me,
   register,
 } from "@/lib/api/session-service";
 
+export type AuthStatus =
+  | "checking"
+  | "authenticated"
+  | "unauthenticated"
+  | "signing-in"
+  | "signing-out";
+
 export type AuthContextValue = {
   isLoading: boolean;
   isAuthenticated: boolean;
+  authStatus: AuthStatus;
   user: SessionUser | null;
   refreshSession: () => Promise<SessionUser | null>;
   signIn: (payload: LoginPayload) => Promise<SessionUser>;
@@ -33,22 +46,45 @@ export type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export function getPostAuthRoute(_user: SessionUser) {
+export function getPostAuthRoute(user: SessionUser) {
+  void user;
   return "/" as const;
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
+
+  const resolveAuthenticatedUser = useCallback(async (payload: unknown) => {
+    const embeddedUser = getSessionUserFromResponse(payload);
+    if (embeddedUser) {
+      return embeddedUser;
+    }
+
+    const meResponse = await me();
+    return getSessionUserFromResponse(meResponse);
+  }, []);
 
   const refreshSession = useCallback(async () => {
     try {
+      setAuthStatus("checking");
       const response = await me();
-      setUser(response.data);
-      return response.data;
+      const currentUser = getSessionUserFromResponse(response);
+      if (!currentUser) {
+        clearApiSession();
+        setUser(null);
+        setAuthStatus("unauthenticated");
+        return null;
+      }
+
+      setUser(currentUser);
+      setAuthStatus("authenticated");
+      return currentUser;
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
+        clearApiSession();
         setUser(null);
+        setAuthStatus("unauthenticated");
         return null;
       }
 
@@ -57,27 +93,68 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const signIn = useCallback(async (payload: LoginPayload) => {
-    const response = await login(payload);
-    setUser(response.data);
-    return response.data;
-  }, []);
+    setAuthStatus("signing-in");
+
+    try {
+      const response = await login(payload);
+      const nextSession = extractAuthSession(response);
+      if (nextSession) {
+        setApiSession(nextSession);
+      }
+
+      const currentUser = await resolveAuthenticatedUser(response);
+      if (!currentUser) {
+        throw new Error("Authenticated user was not returned by the API.");
+      }
+
+      setUser(currentUser);
+      setAuthStatus("authenticated");
+      return currentUser;
+    } catch (error) {
+      clearApiSession();
+      setUser(null);
+      setAuthStatus("unauthenticated");
+      throw error;
+    }
+  }, [resolveAuthenticatedUser]);
 
   const signUp = useCallback(async (payload: RegisterPayload) => {
-    const response = await register(payload);
-    setUser(response.data);
-    return response.data;
-  }, []);
+    setAuthStatus("signing-in");
+
+    try {
+      const response = await register(payload);
+      const nextSession = extractAuthSession(response);
+      if (nextSession) {
+        setApiSession(nextSession);
+      }
+
+      const currentUser = await resolveAuthenticatedUser(response);
+      if (!currentUser) {
+        throw new Error("Authenticated user was not returned by the API.");
+      }
+
+      setUser(currentUser);
+      setAuthStatus("authenticated");
+      return currentUser;
+    } catch (error) {
+      clearApiSession();
+      setUser(null);
+      setAuthStatus("unauthenticated");
+      throw error;
+    }
+  }, [resolveAuthenticatedUser]);
 
   const signOut = useCallback(async () => {
-    try {
-      await logout();
-    } finally {
-      setUser(null);
-    }
+    setAuthStatus("signing-out");
+
+    clearApiSession();
+    setUser(null);
+    setAuthStatus("unauthenticated");
   }, []);
 
   const syncUser = useCallback((nextUser: SessionUser | null) => {
     setUser(nextUser);
+    setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
   }, []);
 
   useEffect(() => {
@@ -85,6 +162,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     (async () => {
       try {
+        hydrateApiSession();
         const currentUser = await refreshSession();
         if (isMounted) {
           setUser(currentUser);
@@ -92,10 +170,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       } catch {
         if (isMounted) {
           setUser(null);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
+          setAuthStatus("unauthenticated");
         }
       }
     })();
@@ -107,8 +182,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      isLoading,
-      isAuthenticated: !!user,
+      isLoading: authStatus === "checking" || authStatus === "signing-in",
+      isAuthenticated: authStatus === "authenticated",
+      authStatus,
       user,
       refreshSession,
       signIn,
@@ -116,7 +192,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signOut,
       syncUser,
     }),
-    [isLoading, refreshSession, signIn, signOut, signUp, syncUser, user],
+    [authStatus, refreshSession, signIn, signOut, signUp, syncUser, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

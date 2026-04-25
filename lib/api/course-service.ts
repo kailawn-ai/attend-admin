@@ -29,34 +29,31 @@ export type SaveCoursePayload = {
 
 export type UpdateCoursePayload = Partial<SaveCoursePayload>;
 
-export type CourseMutationResponse = {
+export type CourseApiResponse<T> = {
+  success: boolean;
   message: string;
-  data: Course;
-};
-
-export type CourseDeleteResponse = {
-  message: string;
+  data: T;
 };
 
 export const courseService = {
   getCourses() {
-    return apiClient.get<Course[]>("/courses");
+    return apiClient.get<CourseApiResponse<Course[]>>("/courses");
   },
 
   getCourse(id: number | string) {
-    return apiClient.get<Course>(`/courses/${id}`);
+    return apiClient.get<CourseApiResponse<Course>>(`/courses/${id}`);
   },
 
   createCourse(payload: SaveCoursePayload) {
-    return apiClient.post<CourseMutationResponse>("/courses", payload);
+    return apiClient.post<CourseApiResponse<Course>>("/courses", payload);
   },
 
   updateCourse(id: number | string, payload: UpdateCoursePayload) {
-    return apiClient.put<CourseMutationResponse>(`/courses/${id}`, payload);
+    return apiClient.put<CourseApiResponse<Course>>(`/courses/${id}`, payload);
   },
 
   deleteCourse(id: number | string) {
-    return apiClient.delete<CourseDeleteResponse>(`/courses/${id}`);
+    return apiClient.delete<CourseApiResponse<null>>(`/courses/${id}`);
   },
 };
 

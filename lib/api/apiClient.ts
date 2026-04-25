@@ -1,3 +1,11 @@
+import {
+  extractAuthSession,
+  getEmptyAuthSession,
+  type ApiAuthSession,
+  readStoredAuthSession,
+  writeStoredAuthSession,
+} from "@/lib/api/auth-session";
+
 export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type ApiPrimitive = string | number | boolean | null;
@@ -17,6 +25,7 @@ export type ApiRequestOptions = Omit<
   headers?: ApiHeaders;
   query?: ApiQueryParams;
   token?: string | null;
+  skipAuthRefresh?: boolean;
 };
 
 export type LaravelValidationErrors = Record<string, string[]>;
@@ -43,9 +52,17 @@ export class ApiError extends Error {
 const DEFAULT_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.API_URL ??
-  "http://localhost:8000/api";
+  "http://192.168.1.54:8000/api";
+const DEFAULT_REFRESH_PATHS = (
+  process.env.NEXT_PUBLIC_API_REFRESH_PATHS ?? "/refresh,/auth/refresh"
+)
+  .split(",")
+  .map((path) => path.trim())
+  .filter(Boolean);
 
-let authToken: string | null = null;
+let authSession: ApiAuthSession = getEmptyAuthSession();
+let isAuthSessionHydrated = false;
+let refreshRequest: Promise<string | null> | null = null;
 
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.replace(/\/+$/, "");
@@ -135,15 +152,123 @@ function getValidationErrors(data: unknown) {
 }
 
 export function setApiToken(token: string | null) {
-  authToken = token;
+  setApiSession({
+    ...authSession,
+    accessToken: token,
+  });
 }
 
 export function getApiToken() {
-  return authToken;
+  return getApiSession().accessToken;
+}
+
+export function getApiSession() {
+  if (!isAuthSessionHydrated) {
+    authSession = readStoredAuthSession();
+    isAuthSessionHydrated = true;
+  }
+
+  return authSession;
+}
+
+export function setApiSession(nextSession: Partial<ApiAuthSession> | null) {
+  authSession = nextSession
+    ? {
+        ...getApiSession(),
+        ...nextSession,
+      }
+    : getEmptyAuthSession();
+  isAuthSessionHydrated = true;
+  writeStoredAuthSession(authSession);
+}
+
+export function hydrateApiSession() {
+  authSession = readStoredAuthSession();
+  isAuthSessionHydrated = true;
+  return authSession;
 }
 
 export function clearApiToken() {
-  authToken = null;
+  clearApiSession();
+}
+
+export function clearApiSession() {
+  authSession = getEmptyAuthSession();
+  isAuthSessionHydrated = true;
+  writeStoredAuthSession(authSession);
+}
+
+async function attemptTokenRefresh(baseUrl: string) {
+  if (refreshRequest) {
+    return refreshRequest;
+  }
+
+  refreshRequest = (async () => {
+    const currentSession = getApiSession();
+
+    if (!currentSession.accessToken && !currentSession.refreshToken) {
+      return null;
+    }
+
+    for (const refreshPath of DEFAULT_REFRESH_PATHS) {
+      const headers: ApiHeaders = {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      };
+
+      if (currentSession.accessToken) {
+        headers.Authorization = `${currentSession.tokenType} ${currentSession.accessToken}`;
+      }
+
+      const response = await fetch(
+        `${normalizeBaseUrl(baseUrl)}${normalizePath(refreshPath)}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers,
+          body: JSON.stringify(
+            currentSession.refreshToken
+              ? { refresh_token: currentSession.refreshToken }
+              : {},
+          ),
+        },
+      ).catch(() => null);
+
+      if (!response) {
+        continue;
+      }
+
+      const data = await parseResponse(response);
+
+      if (!response.ok) {
+        if (response.status === 404 || response.status === 405) {
+          continue;
+        }
+
+        if (response.status === 401) {
+          clearApiSession();
+          return null;
+        }
+
+        continue;
+      }
+
+      const nextSession = extractAuthSession(data, currentSession);
+      if (!nextSession?.accessToken) {
+        continue;
+      }
+
+      setApiSession(nextSession);
+      return nextSession.accessToken;
+    }
+
+    return currentSession.accessToken;
+  })().finally(() => {
+    refreshRequest = null;
+  });
+
+  return refreshRequest;
 }
 
 export function createApiClient(baseUrl = DEFAULT_BASE_URL) {
@@ -162,7 +287,8 @@ export function createApiClient(baseUrl = DEFAULT_BASE_URL) {
       body,
       headers,
       query,
-      token = authToken,
+      token = getApiSession().accessToken,
+      skipAuthRefresh = false,
       ...fetchOptions
     } = options;
 
@@ -181,19 +307,38 @@ export function createApiClient(baseUrl = DEFAULT_BASE_URL) {
       requestBody = body as BodyInit;
     }
 
+    const tokenType = getApiSession().tokenType || "Bearer";
+
     if (token) {
-      requestHeaders.Authorization = `Bearer ${token}`;
+      requestHeaders.Authorization = `${tokenType} ${token}`;
     }
 
     const response = await fetch(
       `${resolvedBaseUrl}${normalizePath(path)}${buildQueryString(query)}`,
       {
         ...fetchOptions,
+        credentials: fetchOptions.credentials ?? "include",
         method,
         headers: requestHeaders,
         body: requestBody,
       },
     );
+
+    if (
+      response.status === 401 &&
+      !skipAuthRefresh &&
+      (getApiSession().accessToken || getApiSession().refreshToken)
+    ) {
+      const refreshedToken = await attemptTokenRefresh(resolvedBaseUrl);
+
+      if (refreshedToken && refreshedToken !== token) {
+        return request<TResponse>(path, {
+          ...options,
+          token: refreshedToken,
+          skipAuthRefresh: true,
+        });
+      }
+    }
 
     const data = await parseResponse(response);
 
