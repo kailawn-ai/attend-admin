@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Copy,
   LoaderCircle,
   Pencil,
   Search,
@@ -49,20 +50,6 @@ function getSemesterForm(semester: Semester): SemesterForm {
   };
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Unknown";
-  }
-
-  return new Intl.DateTimeFormat("en", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
-}
-
 function getFirstFieldMessage(errors: Record<string, string>) {
   return Object.values(errors)[0] ?? "Unable to update semester.";
 }
@@ -94,6 +81,7 @@ export default function EditSemesterPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [copiedSemesterId, setCopiedSemesterId] = useState<number | null>(null);
 
   const loadSemesters = useCallback(async () => {
     const response = await listSemesters({
@@ -265,6 +253,24 @@ export default function EditSemesterPage() {
     setConfirmDeleteId(null);
   }
 
+  async function handleCopyToken(semester: Semester) {
+    if (!semester.static_qr_token) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(semester.static_qr_token);
+      setCopiedSemesterId(semester.id);
+      window.setTimeout(() => {
+        setCopiedSemesterId((current) =>
+          current === semester.id ? null : current,
+        );
+      }, 1500);
+    } catch {
+      setErrorMessage("Unable to copy token right now.");
+    }
+  }
+
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -432,7 +438,7 @@ export default function EditSemesterPage() {
                     <th className="px-4 py-3 font-semibold">Course</th>
                     <th className="px-4 py-3 font-semibold">Geofence</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Updated</th>
+                    <th className="px-4 py-3 font-semibold">Token</th>
                     <th className="px-4 py-3 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
@@ -500,7 +506,26 @@ export default function EditSemesterPage() {
                             </span>
                           </td>
                           <td className="px-4 py-4 text-muted-foreground">
-                            {formatDate(semester.updated_at)}
+                            <div className="flex items-center gap-2">
+                              <span className="block max-w-[220px] truncate font-mono text-xs">
+                                {semester.static_qr_token ?? "--"}
+                              </span>
+                              {semester.static_qr_token ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCopyToken(semester)}
+                                  className="inline-flex size-7 items-center justify-center rounded-lg border border-border/70 bg-background text-muted-foreground transition hover:text-foreground"
+                                  aria-label={`Copy token for ${semester.title}`}
+                                  title={
+                                    copiedSemesterId === semester.id
+                                      ? "Copied"
+                                      : "Copy token"
+                                  }
+                                >
+                                  <Copy className="size-3.5" />
+                                </button>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-4 py-4">
                             <div className="flex justify-end gap-2">

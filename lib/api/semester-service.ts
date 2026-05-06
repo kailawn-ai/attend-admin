@@ -13,6 +13,7 @@ export type Semester = {
   title: string;
   description: string | null;
   semester_number: number;
+  static_qr_token: string | null;
   geofence_latitude: number | null;
   geofence_longitude: number | null;
   geofence_radius_meters: number | null;
