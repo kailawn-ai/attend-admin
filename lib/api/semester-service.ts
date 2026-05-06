@@ -52,6 +52,32 @@ export type SemesterApiResponse<TData> = {
   errors?: Record<string, string[]> | null;
 };
 
+export type PaginatedSemesterResponse = {
+  current_page: number;
+  data: Semester[];
+  first_page_url: string | null;
+  from: number | null;
+  last_page: number;
+  last_page_url: string | null;
+  links: Array<{
+    url: string | null;
+    label: string;
+    active: boolean;
+  }>;
+  next_page_url: string | null;
+  path: string;
+  per_page: number;
+  prev_page_url: string | null;
+  to: number | null;
+  total: number;
+};
+
+export type SemesterListParams = {
+  search?: string;
+  page?: number;
+  per_page?: number;
+};
+
 export type SemesterMutationResponse = SemesterApiResponse<Semester>;
 
 export type SemesterDeleteResponse = SemesterApiResponse<null>;
@@ -65,6 +91,20 @@ export const semesterService = {
     return apiClient.get<SemesterApiResponse<Semester[]>>(
       SEMESTER_API_ROUTES.semesters,
       sessionRequestOptions,
+    );
+  },
+
+  listSemesters(params: SemesterListParams = {}) {
+    return apiClient.get<SemesterApiResponse<PaginatedSemesterResponse>>(
+      SEMESTER_API_ROUTES.semesters,
+      {
+        ...sessionRequestOptions,
+        query: {
+          search: params.search,
+          page: params.page,
+          per_page: params.per_page,
+        },
+      },
     );
   },
 
@@ -108,6 +148,7 @@ export const semesterService = {
 
 export const {
   getSemesters,
+  listSemesters,
   getSemester,
   getSemesterQr,
   createSemester,

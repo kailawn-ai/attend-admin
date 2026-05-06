@@ -7,42 +7,46 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/apiClient";
 import { type Course, getCourses } from "@/lib/api/course-service";
+import { type Semester, getSemesters } from "@/lib/api/semester-service";
 import {
-  type Semester,
-  createSemester,
-  getSemesters,
-} from "@/lib/api/semester-service";
+  type PeriodRecord,
+  createPeriod,
+  getPeriods,
+} from "@/lib/api/period-service";
 
-type SemesterForm = {
+type PeriodForm = {
+  name: string;
+  start_time: string;
+  end_time: string;
+  scan_window_minutes: string;
   course_id: string;
-  title: string;
-  description: string;
-  semester_number: string;
-  geofence_latitude: string;
-  geofence_longitude: string;
-  geofence_radius_meters: string;
+  semester_id: string;
   is_active: boolean;
 };
 
-const INITIAL_FORM: SemesterForm = {
+const INITIAL_FORM: PeriodForm = {
+  name: "",
+  start_time: "",
+  end_time: "",
+  scan_window_minutes: "5",
   course_id: "",
-  title: "",
-  description: "",
-  semester_number: "1",
-  geofence_latitude: "",
-  geofence_longitude: "",
-  geofence_radius_meters: "100",
+  semester_id: "",
   is_active: true,
 };
 
 function getFirstFieldMessage(errors: Record<string, string>) {
-  return Object.values(errors)[0] ?? "Unable to create semester.";
+  return Object.values(errors)[0] ?? "Unable to create period.";
 }
 
-export default function AddSemesterPage() {
-  const [form, setForm] = useState<SemesterForm>(INITIAL_FORM);
+function formatTime(time: string) {
+  return time.slice(0, 5);
+}
+
+export default function AddPeriodPage() {
+  const [form, setForm] = useState<PeriodForm>(INITIAL_FORM);
   const [courses, setCourses] = useState<Course[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
+  const [periods, setPeriods] = useState<PeriodRecord[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -54,19 +58,13 @@ export default function AddSemesterPage() {
 
     async function loadData() {
       try {
-        const [coursesResponse, semestersResponse] = await Promise.all([
-          getCourses(),
-          getSemesters(),
-        ]);
+        const [coursesResponse, semestersResponse, periodsResponse] =
+          await Promise.all([getCourses(), getSemesters(), getPeriods()]);
 
         if (isMounted) {
           setCourses(coursesResponse.data);
           setSemesters(semestersResponse.data);
-          setForm((current) => ({
-            ...current,
-            course_id:
-              current.course_id || coursesResponse.data[0]?.id.toString() || "",
-          }));
+          setPeriods(periodsResponse.data);
         }
       } catch (error) {
         if (!isMounted) {
@@ -76,7 +74,7 @@ export default function AddSemesterPage() {
         setErrorMessage(
           error instanceof ApiError
             ? error.message
-            : "Unable to load semester setup data right now.",
+            : "Unable to load period setup data right now.",
         );
       } finally {
         if (isMounted) {
@@ -92,80 +90,77 @@ export default function AddSemesterPage() {
     };
   }, []);
 
-  const semesterStats = useMemo(
+  const filteredSemesters = useMemo(() => {
+    if (!form.course_id) {
+      return semesters;
+    }
+
+    return semesters.filter(
+      (semester) => semester.course_id === Number(form.course_id),
+    );
+  }, [form.course_id, semesters]);
+
+  const periodStats = useMemo(
     () => [
       {
-        label: "Saved Semesters",
-        value: isLoadingData ? "--" : String(semesters.length).padStart(2, "0"),
-        hint: "Fetched from the semester service",
+        label: "Saved Periods",
+        value: isLoadingData ? "--" : String(periods.length).padStart(2, "0"),
+        hint: "Fetched from the period service",
       },
       {
         label: "Courses",
         value: isLoadingData ? "--" : String(courses.length).padStart(2, "0"),
-        hint: "Available course links",
+        hint: "Optional course links",
       },
       {
-        label: "Required Fields",
-        value: "06",
-        hint: "Course, title, number, and geofence",
+        label: "Semesters",
+        value: isLoadingData ? "--" : String(semesters.length).padStart(2, "0"),
+        hint: "Optional semester context",
       },
       {
         label: "API Route",
         value: "POST",
-        hint: "/semesters",
+        hint: "/periods",
       },
     ],
-    [courses.length, isLoadingData, semesters.length],
+    [courses.length, isLoadingData, periods.length, semesters.length],
   );
 
-  function updateForm(key: keyof SemesterForm, value: string | boolean) {
+  function updateForm(key: keyof PeriodForm, value: string | boolean) {
     setForm((current) => ({
       ...current,
       [key]: value,
+      ...(key === "course_id" ? { semester_id: "" } : {}),
     }));
   }
 
   function validateForm() {
     const nextErrors: Record<string, string> = {};
+    const scanWindowMinutes = Number(form.scan_window_minutes);
 
-    if (!form.course_id) {
-      nextErrors.course_id = "Course is required.";
+    if (!form.name.trim()) {
+      nextErrors.name = "Period name is required.";
     }
 
-    if (!form.title.trim()) {
-      nextErrors.title = "Semester title is required.";
+    if (!form.start_time) {
+      nextErrors.start_time = "Start time is required.";
     }
 
-    if (!Number.isFinite(Number(form.semester_number)) || Number(form.semester_number) < 1) {
-      nextErrors.semester_number = "Semester number must be at least 1.";
+    if (!form.end_time) {
+      nextErrors.end_time = "End time is required.";
     }
 
-    const latitude = Number(form.geofence_latitude);
-    const longitude = Number(form.geofence_longitude);
-
-    if (
-      !form.geofence_latitude.trim() ||
-      !Number.isFinite(latitude) ||
-      latitude < -90 ||
-      latitude > 90
-    ) {
-      nextErrors.geofence_latitude = "Latitude must be between -90 and 90.";
+    if (form.start_time && form.end_time && form.end_time <= form.start_time) {
+      nextErrors.end_time = "End time must be after start time.";
     }
 
     if (
-      !form.geofence_longitude.trim() ||
-      !Number.isFinite(longitude) ||
-      longitude < -180 ||
-      longitude > 180
+      !Number.isInteger(scanWindowMinutes) ||
+      scanWindowMinutes < 1 ||
+      scanWindowMinutes > 60
     ) {
-      nextErrors.geofence_longitude = "Longitude must be between -180 and 180.";
-    }
-
-    if (
-      !Number.isFinite(Number(form.geofence_radius_meters)) ||
-      Number(form.geofence_radius_meters) < 5
-    ) {
-      nextErrors.geofence_radius_meters = "Radius must be at least 5 meters.";
+      nextErrors.scan_window_minutes =
+        "Scan window must be between 1 and 60 minutes.";
     }
 
     return nextErrors;
@@ -191,21 +186,21 @@ export default function AddSemesterPage() {
       setSuccessMessage("");
       setFieldErrors({});
 
-      const response = await createSemester({
-        course_id: Number(form.course_id),
-        title: form.title.trim(),
-        description: form.description.trim() || null,
-        semester_number: Number(form.semester_number),
-        geofence_latitude: Number(form.geofence_latitude),
-        geofence_longitude: Number(form.geofence_longitude),
-        geofence_radius_meters: Number(form.geofence_radius_meters),
+      const response = await createPeriod({
+        name: form.name.trim(),
+        start_time: form.start_time,
+        end_time: form.end_time,
+        scan_window_minutes: Number(form.scan_window_minutes),
+        course_id: form.course_id ? Number(form.course_id) : null,
+        semester_id: form.semester_id ? Number(form.semester_id) : null,
         is_active: form.is_active,
       });
 
-      setSemesters((current) => [response.data, ...current]);
+      setPeriods((current) => [response.data, ...current]);
       setForm({
         ...INITIAL_FORM,
         course_id: form.course_id,
+        semester_id: form.semester_id,
       });
       setSuccessMessage(response.message);
     } catch (error) {
@@ -220,7 +215,7 @@ export default function AddSemesterPage() {
         setFieldErrors(nextFieldErrors);
         setErrorMessage(getFirstFieldMessage(nextFieldErrors) || error.message);
       } else {
-        setErrorMessage("Unable to create semester right now.");
+        setErrorMessage("Unable to create period right now.");
       }
     } finally {
       setIsSubmitting(false);
@@ -229,122 +224,38 @@ export default function AddSemesterPage() {
 
   return (
     <SectionPage
-      eyebrow="Semester"
-      title="Add a new semester"
-      description="This screen now uses the real semester service. The backend expects a linked course, semester title and number, geofence coordinates, radius, and optional active status."
-      stats={semesterStats}
+      eyebrow="Period"
+      title="Add a new period"
+      description="This screen uses the real period service. The backend expects a name, start and end time, optional scan window, optional course or semester context, and active status."
+      stats={periodStats}
     >
       <SectionCard
-        title="Semester setup form"
-        description="Wired to `createSemester()` and aligned to the current Laravel controller validation."
+        title="Period setup form"
+        description="Wired to `createPeriod()` and aligned to the current Laravel period validation."
       >
         <form className="space-y-5" onSubmit={handleSubmit}>
           <div className="space-y-2">
             <label
-              htmlFor="semester-course"
+              htmlFor="period-name"
               className="text-sm font-medium text-foreground"
             >
-              Course
+              Period name
             </label>
-            <select
-              id="semester-course"
-              value={form.course_id}
-              onChange={(event) => updateForm("course_id", event.target.value)}
-              disabled={isLoadingData || courses.length === 0}
-              aria-invalid={Boolean(fieldErrors.course_id)}
-              className="h-11 w-full rounded-2xl border border-input bg-background px-3.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30"
-            >
-              {courses.length === 0 ? (
-                <option value="">No courses available</option>
-              ) : null}
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  {course.title}
-                </option>
-              ))}
-            </select>
-            {fieldErrors.course_id ? (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {fieldErrors.course_id}
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Required. Semesters must belong to an existing course.
-              </p>
-            )}
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-[1fr_10rem]">
-            <div className="space-y-2">
-              <label
-                htmlFor="semester-title"
-                className="text-sm font-medium text-foreground"
-              >
-                Semester title
-              </label>
-              <Input
-                id="semester-title"
-                value={form.title}
-                onChange={(event) => updateForm("title", event.target.value)}
-                placeholder="Semester 1"
-                aria-invalid={Boolean(fieldErrors.title)}
-                className="h-11 rounded-2xl bg-background"
-              />
-              {fieldErrors.title ? (
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {fieldErrors.title}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <label
-                htmlFor="semester-number"
-                className="text-sm font-medium text-foreground"
-              >
-                Number
-              </label>
-              <Input
-                id="semester-number"
-                type="number"
-                min="1"
-                value={form.semester_number}
-                onChange={(event) =>
-                  updateForm("semester_number", event.target.value)
-                }
-                aria-invalid={Boolean(fieldErrors.semester_number)}
-                className="h-11 rounded-2xl bg-background"
-              />
-              {fieldErrors.semester_number ? (
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {fieldErrors.semester_number}
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label
-              htmlFor="semester-description"
-              className="text-sm font-medium text-foreground"
-            >
-              Description
-            </label>
-            <textarea
-              id="semester-description"
-              value={form.description}
-              onChange={(event) => updateForm("description", event.target.value)}
-              placeholder="Add a short description for admins and academic staff."
-              rows={4}
-              className="w-full rounded-2xl border border-input bg-background px-3.5 py-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            <Input
+              id="period-name"
+              value={form.name}
+              onChange={(event) => updateForm("name", event.target.value)}
+              placeholder="Period 1"
+              aria-invalid={Boolean(fieldErrors.name)}
+              className="h-11 rounded-2xl bg-background"
             />
-            {fieldErrors.description ? (
+            {fieldErrors.name ? (
               <p className="text-sm text-red-600 dark:text-red-400">
-                {fieldErrors.description}
+                {fieldErrors.name}
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Optional. The backend accepts nullable text here.
+                Required. Use the label shown in timetables and scan windows.
               </p>
             )}
           </div>
@@ -352,84 +263,150 @@ export default function AddSemesterPage() {
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <label
-                htmlFor="semester-latitude"
+                htmlFor="period-start-time"
                 className="text-sm font-medium text-foreground"
               >
-                Latitude
+                Start time
               </label>
               <Input
-                id="semester-latitude"
-                type="number"
-                step="any"
-                min="-90"
-                max="90"
-                value={form.geofence_latitude}
+                id="period-start-time"
+                type="time"
+                value={form.start_time}
                 onChange={(event) =>
-                  updateForm("geofence_latitude", event.target.value)
+                  updateForm("start_time", event.target.value)
                 }
-                placeholder="12.9716"
-                aria-invalid={Boolean(fieldErrors.geofence_latitude)}
+                aria-invalid={Boolean(fieldErrors.start_time)}
                 className="h-11 rounded-2xl bg-background"
               />
-              {fieldErrors.geofence_latitude ? (
+              {fieldErrors.start_time ? (
                 <p className="text-sm text-red-600 dark:text-red-400">
-                  {fieldErrors.geofence_latitude}
+                  {fieldErrors.start_time}
                 </p>
               ) : null}
             </div>
 
             <div className="space-y-2">
               <label
-                htmlFor="semester-longitude"
+                htmlFor="period-end-time"
                 className="text-sm font-medium text-foreground"
               >
-                Longitude
+                End time
               </label>
               <Input
-                id="semester-longitude"
-                type="number"
-                step="any"
-                min="-180"
-                max="180"
-                value={form.geofence_longitude}
-                onChange={(event) =>
-                  updateForm("geofence_longitude", event.target.value)
-                }
-                placeholder="77.5946"
-                aria-invalid={Boolean(fieldErrors.geofence_longitude)}
+                id="period-end-time"
+                type="time"
+                value={form.end_time}
+                onChange={(event) => updateForm("end_time", event.target.value)}
+                aria-invalid={Boolean(fieldErrors.end_time)}
                 className="h-11 rounded-2xl bg-background"
               />
-              {fieldErrors.geofence_longitude ? (
+              {fieldErrors.end_time ? (
                 <p className="text-sm text-red-600 dark:text-red-400">
-                  {fieldErrors.geofence_longitude}
+                  {fieldErrors.end_time}
                 </p>
               ) : null}
             </div>
 
             <div className="space-y-2">
               <label
-                htmlFor="semester-radius"
+                htmlFor="period-scan-window"
                 className="text-sm font-medium text-foreground"
               >
-                Radius meters
+                Scan window
               </label>
               <Input
-                id="semester-radius"
+                id="period-scan-window"
                 type="number"
-                min="5"
-                max="5000"
-                value={form.geofence_radius_meters}
+                min="1"
+                max="60"
+                value={form.scan_window_minutes}
                 onChange={(event) =>
-                  updateForm("geofence_radius_meters", event.target.value)
+                  updateForm("scan_window_minutes", event.target.value)
                 }
-                aria-invalid={Boolean(fieldErrors.geofence_radius_meters)}
+                aria-invalid={Boolean(fieldErrors.scan_window_minutes)}
                 className="h-11 rounded-2xl bg-background"
               />
-              {fieldErrors.geofence_radius_meters ? (
+              {fieldErrors.scan_window_minutes ? (
                 <p className="text-sm text-red-600 dark:text-red-400">
-                  {fieldErrors.geofence_radius_meters}
+                  {fieldErrors.scan_window_minutes}
                 </p>
-              ) : null}
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Minutes after start time. Backend default is 5.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label
+                htmlFor="period-course"
+                className="text-sm font-medium text-foreground"
+              >
+                Course
+              </label>
+              <select
+                id="period-course"
+                value={form.course_id}
+                onChange={(event) =>
+                  updateForm("course_id", event.target.value)
+                }
+                disabled={isLoadingData}
+                aria-invalid={Boolean(fieldErrors.course_id)}
+                className="h-11 w-full rounded-2xl border border-input bg-background px-3.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30"
+              >
+                <option value="">No course context</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.title}
+                  </option>
+                ))}
+              </select>
+              {fieldErrors.course_id ? (
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {fieldErrors.course_id}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Optional. Link the period to a course when it is course-specific.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="period-semester"
+                className="text-sm font-medium text-foreground"
+              >
+                Semester
+              </label>
+              <select
+                id="period-semester"
+                value={form.semester_id}
+                onChange={(event) =>
+                  updateForm("semester_id", event.target.value)
+                }
+                disabled={isLoadingData || filteredSemesters.length === 0}
+                aria-invalid={Boolean(fieldErrors.semester_id)}
+                className="h-11 w-full rounded-2xl border border-input bg-background px-3.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-input/30"
+              >
+                <option value="">No semester context</option>
+                {filteredSemesters.map((semester) => (
+                  <option key={semester.id} value={semester.id}>
+                    {semester.title}
+                  </option>
+                ))}
+              </select>
+              {fieldErrors.semester_id ? (
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {fieldErrors.semester_id}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Optional. Choosing a course narrows this list.
+                </p>
+              )}
             </div>
           </div>
 
@@ -437,7 +414,7 @@ export default function AddSemesterPage() {
             <div>
               <p className="text-sm font-medium text-foreground">Active now</p>
               <p className="text-sm text-muted-foreground">
-                Sends `is_active` to the semester service.
+                Sends `is_active` to the period service.
               </p>
             </div>
             <button
@@ -476,17 +453,17 @@ export default function AddSemesterPage() {
               type="submit"
               size="lg"
               className="rounded-2xl bg-blue-600 px-5 text-white hover:bg-blue-500"
-              disabled={isSubmitting || courses.length === 0}
+              disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  Saving semester...
+                  Saving period...
                 </>
               ) : (
                 <>
                   <PlusCircle className="size-4" />
-                  Create semester
+                  Create period
                 </>
               )}
             </Button>
@@ -498,10 +475,7 @@ export default function AddSemesterPage() {
               className="rounded-2xl px-5"
               disabled={isSubmitting}
               onClick={() => {
-                setForm({
-                  ...INITIAL_FORM,
-                  course_id: courses[0]?.id.toString() || "",
-                });
+                setForm(INITIAL_FORM);
                 setFieldErrors({});
                 setErrorMessage("");
                 setSuccessMessage("");
@@ -520,13 +494,13 @@ export default function AddSemesterPage() {
         <div className="space-y-4">
           <div className="rounded-2xl border border-border/70 bg-muted/30 p-4 text-sm text-muted-foreground">
             <p>
-              `SemesterController@store` validates `course_id`, `title`,
-              `semester_number`, geofence latitude, longitude, radius, optional
-              `description`, and `is_active`.
+              `PeriodController@store` validates `name`, `start_time`,
+              `end_time`, optional `scan_window_minutes`, optional `course_id`,
+              optional `semester_id`, and `is_active`.
             </p>
             <p className="mt-2">
-              The backend generates `static_qr_token` automatically when the
-              semester is created.
+              The period service posts to `/periods` and reads existing periods
+              with `getPeriods()`.
             </p>
           </div>
 
@@ -534,10 +508,10 @@ export default function AddSemesterPage() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-foreground">
-                  Recent semesters
+                  Recent periods
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Loaded with `getSemesters()`
+                  Loaded with `getPeriods()`
                 </p>
               </div>
               {isLoadingData ? (
@@ -546,37 +520,38 @@ export default function AddSemesterPage() {
             </div>
 
             <div className="space-y-2">
-              {semesters.slice(0, 5).map((semester) => (
+              {periods.slice(0, 5).map((period) => (
                 <div
-                  key={semester.id}
+                  key={period.id}
                   className="rounded-2xl border border-border/60 bg-muted/20 px-4 py-3"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
-                        {semester.title}
+                        {period.name}
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        {semester.course?.title ?? "No course loaded"} - Semester{" "}
-                        {semester.semester_number}
+                        {formatTime(period.start_time)} -{" "}
+                        {formatTime(period.end_time)} -{" "}
+                        {period.course?.title ?? "No course loaded"}
                       </p>
                     </div>
                     <span
                       className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
-                        semester.is_active
+                        period.is_active
                           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
                           : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300"
                       }`}
                     >
-                      {semester.is_active ? "Active" : "Inactive"}
+                      {period.is_active ? "Active" : "Inactive"}
                     </span>
                   </div>
                 </div>
               ))}
 
-              {!isLoadingData && semesters.length === 0 ? (
+              {!isLoadingData && periods.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
-                  No semesters found yet.
+                  No periods found yet.
                 </div>
               ) : null}
             </div>

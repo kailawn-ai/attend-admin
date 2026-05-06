@@ -35,9 +35,48 @@ export type CourseApiResponse<T> = {
   data: T;
 };
 
+export type PaginatedCourseResponse = {
+  current_page: number;
+  data: Course[];
+  first_page_url: string | null;
+  from: number | null;
+  last_page: number;
+  last_page_url: string | null;
+  links: Array<{
+    url: string | null;
+    label: string;
+    active: boolean;
+  }>;
+  next_page_url: string | null;
+  path: string;
+  per_page: number;
+  prev_page_url: string | null;
+  to: number | null;
+  total: number;
+};
+
+export type CourseListParams = {
+  search?: string;
+  page?: number;
+  per_page?: number;
+};
+
 export const courseService = {
   getCourses() {
     return apiClient.get<CourseApiResponse<Course[]>>("/courses");
+  },
+
+  listCourses(params: CourseListParams = {}) {
+    return apiClient.get<CourseApiResponse<PaginatedCourseResponse>>(
+      "/courses",
+      {
+        query: {
+          search: params.search,
+          page: params.page,
+          per_page: params.per_page,
+        },
+      },
+    );
   },
 
   getCourse(id: number | string) {
@@ -59,6 +98,7 @@ export const courseService = {
 
 export const {
   getCourses,
+  listCourses,
   getCourse,
   createCourse,
   updateCourse,

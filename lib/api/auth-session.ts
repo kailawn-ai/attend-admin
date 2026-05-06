@@ -8,6 +8,8 @@ export type ApiAuthSession = {
 };
 
 const AUTH_STORAGE_KEY = "attend-admin.auth-session";
+const AUTH_SESSION_HINT_KEY = "attend-admin.auth-session-hint";
+const AUTH_USER_CACHE_KEY = "attend-admin.auth-user";
 
 const EMPTY_AUTH_SESSION: ApiAuthSession = {
   accessToken: null,
@@ -131,6 +133,58 @@ export function writeStoredAuthSession(session: ApiAuthSession) {
   }
 
   window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+}
+
+export function readStoredSessionHint() {
+  if (!isBrowser()) {
+    return false;
+  }
+
+  return window.localStorage.getItem(AUTH_SESSION_HINT_KEY) === "1";
+}
+
+export function writeStoredSessionHint(hasSession: boolean) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  if (hasSession) {
+    window.localStorage.setItem(AUTH_SESSION_HINT_KEY, "1");
+    return;
+  }
+
+  window.localStorage.removeItem(AUTH_SESSION_HINT_KEY);
+}
+
+export function readStoredSessionUser<TUser>() {
+  if (!isBrowser()) {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(AUTH_USER_CACHE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue);
+    return looksLikeUser(parsed) ? (parsed as TUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeStoredSessionUser<TUser>(user: TUser | null) {
+  if (!isBrowser()) {
+    return;
+  }
+
+  if (!user) {
+    window.localStorage.removeItem(AUTH_USER_CACHE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(AUTH_USER_CACHE_KEY, JSON.stringify(user));
 }
 
 export function extractSessionUser<TUser>(payload: unknown) {

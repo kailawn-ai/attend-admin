@@ -27,6 +27,7 @@ export type PeriodRecord = {
   name: string;
   start_time: string;
   end_time: string;
+  scan_window_minutes: number;
   course_id: number | null;
   semester_id: number | null;
   is_active: boolean;
@@ -62,6 +63,7 @@ export type SavePeriodPayload = {
   name: string;
   start_time: string;
   end_time: string;
+  scan_window_minutes?: number;
   course_id?: number | null;
   semester_id?: number | null;
   is_active?: boolean;

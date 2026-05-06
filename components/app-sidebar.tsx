@@ -12,7 +12,7 @@ import {
   ChevronRight,
   FilePenLine,
   GraduationCap,
-  Home,
+  Landmark,
   LayoutDashboard,
   MessageSquareMore,
   MessageSquareWarning,
@@ -21,6 +21,7 @@ import {
   UsersRound,
   Users,
   X,
+  Calendar1,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,10 +31,10 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/lib/auth-context";
+import Image from "next/image";
 
 const navigationItems = [
-  { title: "Home", href: "/", icon: Home },
-  { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { title: "Dashboard", href: "/", icon: LayoutDashboard },
   {
     title: "Course",
     href: "/course",
@@ -43,6 +44,7 @@ const navigationItems = [
       { title: "Edit Course", href: "/course/edit", icon: FilePenLine },
     ],
   },
+
   {
     title: "Semester",
     href: "/semester",
@@ -50,6 +52,28 @@ const navigationItems = [
     children: [
       { title: "Add Semester", href: "/semester/add", icon: PlusCircle },
       { title: "Edit Semester", href: "/semester/edit", icon: FilePenLine },
+    ],
+  },
+  {
+    title: "Institution",
+    href: "/institution",
+    icon: Landmark,
+    children: [
+      { title: "Add Institution", href: "/institution/add", icon: PlusCircle },
+      {
+        title: "Edit Institution",
+        href: "/institution/edit",
+        icon: FilePenLine,
+      },
+    ],
+  },
+  {
+    title: "Period",
+    href: "/period",
+    icon: Calendar1,
+    children: [
+      { title: "Add Period", href: "/period/add", icon: PlusCircle },
+      { title: "Edit Period", href: "/period/edit", icon: FilePenLine },
     ],
   },
   {
@@ -150,16 +174,22 @@ export function AppSidebar({
                 showCollapsed && "justify-center",
               )}
             >
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-blue-500 via-sky-500 to-indigo-500 text-white shadow-[0_14px_30px_rgba(37,99,235,0.35)]">
-                <BellRing className="size-4" />
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl text-white shadow-[0_14px_30px_rgba(37,99,235,0.35)] overflow-hidden">
+                <Image
+                  src="/logo.jpg"
+                  alt="Able Logo"
+                  width={42}
+                  height={42}
+                  className="rounded-3xl object-cover"
+                />
               </div>
               {!showCollapsed && (
                 <div className="min-w-0">
                   <p className="truncate text-lg font-semibold tracking-tight text-foreground">
-                    Able
+                    AttendHub
                   </p>
                   <p className="truncate text-[11px] uppercase tracking-[0.28em] text-blue-500/80 dark:text-blue-400/80">
-                    Admin Suite
+                    Admin Panel
                   </p>
                 </div>
               )}
@@ -197,24 +227,46 @@ export function AppSidebar({
                   (pathname === item.href ||
                     pathname.startsWith(`${item.href}/`));
 
+                const hasChildren = Boolean(item.children?.length);
+
                 const link = (
                   <div className="space-y-1">
-                    <div
-                      className={cn(
-                        "group flex items-center rounded-2xl text-sm font-medium transition-all duration-200",
-                        showCollapsed
-                          ? "mx-auto size-12 justify-center"
-                          : "gap-3 px-3.5 py-3",
-                        isActive
-                          ? "bg-linear-to-r from-blue-500/14 to-sky-400/10 text-blue-600 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.16)] dark:text-blue-400"
-                          : "text-slate-600 hover:bg-slate-100/90 hover:text-slate-950 dark:text-sidebar-foreground/80 dark:hover:bg-sidebar-accent/70 dark:hover:text-sidebar-foreground",
-                      )}
-                    >
+                    {hasChildren && !showCollapsed ? (
+                      <button
+                        type="button"
+                        className={cn(
+                          "group flex w-full items-center rounded-2xl text-sm font-medium transition-all duration-200",
+                          "gap-3 px-3.5 py-3",
+                          isActive
+                            ? "bg-linear-to-r from-blue-500/14 to-sky-400/10 text-blue-600 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.16)] dark:text-blue-400"
+                            : "text-slate-600 hover:bg-slate-100/90 hover:text-slate-950 dark:text-sidebar-foreground/80 dark:hover:bg-sidebar-accent/70 dark:hover:text-sidebar-foreground",
+                        )}
+                        onClick={() => toggleSection(item.href)}
+                        aria-label={`${isSectionOpen ? "Collapse" : "Expand"} ${item.title}`}
+                        aria-expanded={isSectionOpen}
+                      >
+                        <item.icon className="size-4 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          {item.title}
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                            isSectionOpen && "rotate-180",
+                          )}
+                        />
+                      </button>
+                    ) : (
                       <Link
                         href={item.href}
                         className={cn(
-                          "flex min-w-0 flex-1 items-center",
-                          showCollapsed ? "justify-center" : "gap-3",
+                          "group flex items-center rounded-2xl text-sm font-medium transition-all duration-200",
+                          showCollapsed
+                            ? "mx-auto size-12 justify-center"
+                            : "gap-3 px-3.5 py-3",
+                          isActive
+                            ? "bg-linear-to-r from-blue-500/14 to-sky-400/10 text-blue-600 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.16)] dark:text-blue-400"
+                            : "text-slate-600 hover:bg-slate-100/90 hover:text-slate-950 dark:text-sidebar-foreground/80 dark:hover:bg-sidebar-accent/70 dark:hover:text-sidebar-foreground",
                         )}
                         onClick={() => {
                           if (isMobile) {
@@ -232,24 +284,7 @@ export function AppSidebar({
                           <span className="truncate">{item.title}</span>
                         )}
                       </Link>
-
-                      {!showCollapsed && item.children?.length ? (
-                        <button
-                          type="button"
-                          className="ml-auto flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
-                          onClick={() => toggleSection(item.href)}
-                          aria-label={`${isSectionOpen ? "Collapse" : "Expand"} ${item.title}`}
-                          aria-expanded={isSectionOpen}
-                        >
-                          <ChevronDown
-                            className={cn(
-                              "size-4 transition-transform duration-200",
-                              isSectionOpen && "rotate-180",
-                            )}
-                          />
-                        </button>
-                      ) : null}
-                    </div>
+                    )}
 
                     {!showCollapsed &&
                     item.children?.length &&

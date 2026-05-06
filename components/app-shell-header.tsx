@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Moon,
-  PanelLeft,
-  PanelLeftClose,
-  Search,
-  Sun,
-} from "lucide-react";
+import { Moon, PanelLeft, PanelLeftClose, Search, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTheme } from "@/lib/theme-context";
@@ -47,18 +41,6 @@ export function AppShellHeader({
             <PanelLeftClose className="size-4" />
           )}
         </Button>
-
-        <div className="hidden min-w-0 items-center gap-3 md:flex">
-          <div className="relative w-72 lg:w-80">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              readOnly
-              value=""
-              placeholder="Ctrl + K"
-              className="h-10 rounded-xl border-border/70 bg-card pl-9 text-sm shadow-sm placeholder:text-muted-foreground"
-            />
-          </div>
-        </div>
 
         <div className="ml-auto flex items-center gap-1 md:gap-2">
           <Button
