@@ -5,13 +5,14 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Copy,
   LoaderCircle,
   Pencil,
+  QrCode,
   Search,
   Trash2,
   X,
 } from "lucide-react";
+import { SemesterQrModal } from "@/components/semester/semester-qr-modal";
 import { SectionCard, SectionPage } from "@/components/section-page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,7 +82,7 @@ export default function EditSemesterPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [copiedSemesterId, setCopiedSemesterId] = useState<number | null>(null);
+  const [qrSemester, setQrSemester] = useState<Semester | null>(null);
 
   const loadSemesters = useCallback(async () => {
     const response = await listSemesters({
@@ -253,22 +254,13 @@ export default function EditSemesterPage() {
     setConfirmDeleteId(null);
   }
 
-  async function handleCopyToken(semester: Semester) {
+  function handleOpenQrModal(semester: Semester) {
     if (!semester.static_qr_token) {
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(semester.static_qr_token);
-      setCopiedSemesterId(semester.id);
-      window.setTimeout(() => {
-        setCopiedSemesterId((current) =>
-          current === semester.id ? null : current,
-        );
-      }, 1500);
-    } catch {
-      setErrorMessage("Unable to copy token right now.");
-    }
+    setQrSemester(semester);
+    setErrorMessage("");
   }
 
   async function handleSave(event: React.FormEvent<HTMLFormElement>) {
@@ -382,6 +374,17 @@ export default function EditSemesterPage() {
       description="Search semester records, update term details, and remove stale entries using the current Laravel semester endpoints."
       stats={semesterStats}
     >
+      <SemesterQrModal
+        open={qrSemester !== null}
+        semester={qrSemester}
+        onOpenChange={(open) => {
+          if (!open) {
+            setQrSemester(null);
+          }
+        }}
+        onError={setErrorMessage}
+      />
+
       <SectionCard
         title="Semester list"
         description="Fetched from GET /semesters with backend search and pagination."
@@ -513,16 +516,12 @@ export default function EditSemesterPage() {
                               {semester.static_qr_token ? (
                                 <button
                                   type="button"
-                                  onClick={() => void handleCopyToken(semester)}
+                                  onClick={() => handleOpenQrModal(semester)}
                                   className="inline-flex size-7 items-center justify-center rounded-lg border border-border/70 bg-background text-muted-foreground transition hover:text-foreground"
-                                  aria-label={`Copy token for ${semester.title}`}
-                                  title={
-                                    copiedSemesterId === semester.id
-                                      ? "Copied"
-                                      : "Copy token"
-                                  }
+                                  aria-label={`Open QR code for ${semester.title}`}
+                                  title="Open QR code"
                                 >
-                                  <Copy className="size-3.5" />
+                                  <QrCode className="size-3.5" />
                                 </button>
                               ) : null}
                             </div>

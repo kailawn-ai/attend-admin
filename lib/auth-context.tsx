@@ -198,7 +198,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       if (cachedUser && hasSessionHint && isMounted) {
         setUser(cachedUser);
-        setAuthStatus("authenticated");
+        setAuthStatus("checking");
       }
 
       if (!shouldVerifySession) {
@@ -249,7 +249,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       if (cachedUser && readStoredSessionHint()) {
         setUser(cachedUser);
-        setAuthStatus("authenticated");
+        setAuthStatus("checking");
         return;
       }
 
