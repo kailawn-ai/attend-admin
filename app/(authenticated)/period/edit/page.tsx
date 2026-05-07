@@ -41,7 +41,10 @@ function getPeriodForm(period: PeriodRecord): PeriodForm {
     name: period.name,
     start_time: formatTimeInput(period.start_time),
     end_time: formatTimeInput(period.end_time),
-    scan_window_minutes: (period.scan_window_minutes ?? 5).toString(),
+    scan_window_minutes:
+      period.scan_window_minutes === null
+        ? ""
+        : period.scan_window_minutes.toString(),
     course_id: period.course_id?.toString() ?? "",
     semester_id: period.semester_id?.toString() ?? "",
     is_active: Boolean(period.is_active),
@@ -97,7 +100,7 @@ export default function EditPeriodPage() {
     name: "",
     start_time: "",
     end_time: "",
-    scan_window_minutes: "5",
+    scan_window_minutes: "",
     course_id: "",
     semester_id: "",
     is_active: true,
@@ -487,7 +490,10 @@ function validateForm() {
                               {formatTimeInput(period.end_time)}
                             </p>
                             <p className="mt-1 text-xs">
-                              Scan window {period.scan_window_minutes ?? 5} min
+                              Scan window{" "}
+                              {period.scan_window_minutes === null
+                                ? "Not set"
+                                : `${period.scan_window_minutes} min`}
                             </p>
                           </td>
                           <td className="px-4 py-4 text-muted-foreground">
