@@ -41,7 +41,10 @@ function getPeriodForm(period: PeriodRecord): PeriodForm {
     name: period.name,
     start_time: formatTimeInput(period.start_time),
     end_time: formatTimeInput(period.end_time),
-    scan_window_minutes: (period.scan_window_minutes ?? 5).toString(),
+    scan_window_minutes:
+      period.scan_window_minutes === null
+        ? ""
+        : period.scan_window_minutes.toString(),
     course_id: period.course_id?.toString() ?? "",
     semester_id: period.semester_id?.toString() ?? "",
     is_active: Boolean(period.is_active),
@@ -97,7 +100,7 @@ export default function EditPeriodPage() {
     name: "",
     start_time: "",
     end_time: "",
-    scan_window_minutes: "5",
+    scan_window_minutes: "",
     course_id: "",
     semester_id: "",
     is_active: true,
@@ -232,8 +235,9 @@ export default function EditPeriodPage() {
     }));
   }
 
-  function validateForm() {
+function validateForm() {
     const nextErrors: Record<string, string> = {};
+    const hasScanWindowValue = form.scan_window_minutes.trim() !== "";
     const scanWindowMinutes = Number(form.scan_window_minutes);
 
     if (!form.name.trim()) {
@@ -253,12 +257,13 @@ export default function EditPeriodPage() {
     }
 
     if (
-      !Number.isInteger(scanWindowMinutes) ||
-      scanWindowMinutes < 1 ||
-      scanWindowMinutes > 60
+      hasScanWindowValue &&
+      (!Number.isInteger(scanWindowMinutes) ||
+        scanWindowMinutes < 1 ||
+        scanWindowMinutes > 1440)
     ) {
       nextErrors.scan_window_minutes =
-        "Scan window must be between 1 and 60 minutes.";
+        "Scan window must be between 1 and 1440 minutes.";
     }
 
     return nextErrors;
@@ -297,7 +302,9 @@ export default function EditPeriodPage() {
         name: form.name.trim(),
         start_time: form.start_time,
         end_time: form.end_time,
-        scan_window_minutes: Number(form.scan_window_minutes),
+        scan_window_minutes: form.scan_window_minutes.trim()
+          ? Number(form.scan_window_minutes)
+          : null,
         course_id: form.course_id ? Number(form.course_id) : null,
         semester_id: form.semester_id ? Number(form.semester_id) : null,
         is_active: form.is_active,
@@ -483,7 +490,10 @@ export default function EditPeriodPage() {
                               {formatTimeInput(period.end_time)}
                             </p>
                             <p className="mt-1 text-xs">
-                              Scan window {period.scan_window_minutes ?? 5} min
+                              Scan window{" "}
+                              {period.scan_window_minutes === null
+                                ? "Not set"
+                                : `${period.scan_window_minutes} min`}
                             </p>
                           </td>
                           <td className="px-4 py-4 text-muted-foreground">
@@ -710,7 +720,7 @@ export default function EditPeriodPage() {
                   id="edit-period-scan-window"
                   type="number"
                   min="1"
-                  max="60"
+                  max="1440"
                   value={form.scan_window_minutes}
                   onChange={(event) =>
                     updateFormValue("scan_window_minutes", event.target.value)
