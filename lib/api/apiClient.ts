@@ -52,7 +52,7 @@ export class ApiError extends Error {
 const DEFAULT_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   process.env.API_URL ??
-  "https://attend.lengzem.in/api";
+  "https://attend.zostream.in/api";
 const DEFAULT_REFRESH_PATHS = (
   process.env.NEXT_PUBLIC_API_REFRESH_PATHS ?? "/refresh,/auth/refresh"
 )

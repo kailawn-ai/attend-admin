@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { usePathname } from "next/navigation";
@@ -63,6 +64,7 @@ export function getPostAuthRoute(user: SessionUser) {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const pathname = usePathname();
+  const initialPathnameRef = useRef(pathname);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
 
@@ -93,7 +95,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const refreshSession = useCallback(async () => {
     try {
-      setAuthStatus("checking");
+      setAuthStatus((currentStatus) =>
+        currentStatus === "authenticated" ? currentStatus : "checking",
+      );
       const response = await me();
       const currentUser = getSessionUserFromResponse(response);
       if (!currentUser) {
@@ -182,6 +186,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
     clearStoredSession();
   }, [clearStoredSession, persistAuthenticatedUser]);
 
+  const verifySessionSilently = useCallback(async () => {
+    try {
+      const response = await me();
+      const currentUser = getSessionUserFromResponse(response);
+
+      if (currentUser) {
+        persistAuthenticatedUser(currentUser);
+        return currentUser;
+      }
+
+      clearStoredSession();
+      return null;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearStoredSession();
+        return null;
+      }
+
+      throw error;
+    }
+  }, [clearStoredSession, persistAuthenticatedUser]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -194,11 +220,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
         Boolean(cachedUser) ||
         Boolean(session.accessToken || session.refreshToken);
       const shouldVerifySession =
-        hasStoredSession || !PUBLIC_ROUTES.has(pathname);
+        hasStoredSession || !PUBLIC_ROUTES.has(initialPathnameRef.current);
 
       if (cachedUser && hasSessionHint && isMounted) {
         setUser(cachedUser);
-        setAuthStatus("checking");
+        setAuthStatus("authenticated");
       }
 
       if (!shouldVerifySession) {
@@ -208,23 +234,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       try {
-        const response = await me();
-        const currentUser = getSessionUserFromResponse(response);
+        const currentUser = await verifySessionSilently();
 
-        if (!isMounted) {
-          return;
-        }
-
-        if (currentUser) {
-          persistAuthenticatedUser(currentUser);
-          return;
-        }
-
-        clearStoredSession();
-      } catch (error) {
         if (isMounted) {
-          if (error instanceof ApiError && error.status === 401) {
-            clearStoredSession();
+          if (currentUser) {
             return;
           }
 
@@ -233,13 +246,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
             setAuthStatus("unauthenticated");
           }
         }
+      } catch (error) {
+        if (isMounted && (!cachedUser || !hasSessionHint)) {
+          setUser(null);
+          setAuthStatus("unauthenticated");
+        }
       }
     })();
 
     return () => {
       isMounted = false;
     };
-  }, [clearStoredSession, pathname, persistAuthenticatedUser]);
+  }, [verifySessionSilently]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") {
+      return;
+    }
+
+    void verifySessionSilently();
+  }, [pathname, authStatus, verifySessionSilently]);
 
   useEffect(() => {
     const handleStorage = () => {
@@ -266,31 +292,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    const verifyVisibleSession = async () => {
-      try {
-        const response = await me();
-        const currentUser = getSessionUserFromResponse(response);
-
-        if (currentUser) {
-          persistAuthenticatedUser(currentUser);
-          return;
-        }
-
-        clearStoredSession();
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          clearStoredSession();
-        }
-      }
-    };
-
     const handleFocus = () => {
-      void verifyVisibleSession();
+      void verifySessionSilently();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        void verifyVisibleSession();
+        void verifySessionSilently();
       }
     };
 
@@ -301,7 +309,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [authStatus, clearStoredSession, persistAuthenticatedUser]);
+  }, [authStatus, verifySessionSilently]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
